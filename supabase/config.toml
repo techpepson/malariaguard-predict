@@ -1,0 +1,4 @@
+project_id = "habhcxklctubwmtvotxv"
+
+[functions.predict-malaria]
+verify_jwt = false
