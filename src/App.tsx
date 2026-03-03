@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import Index from "./pages/Index";
+import VerifySuccess from "./pages/VerifySuccess";
 import AuthPage from "./pages/AuthPage";
 import Dashboard from "./pages/Dashboard";
 import PredictionForm from "./pages/PredictionForm";
@@ -30,6 +31,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<AuthPage />} />
+            <Route path="/verify" element={<VerifySuccess />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/predict" element={<ProtectedRoute><PredictionForm /></ProtectedRoute>} />
             <Route path="/results/:id" element={<ProtectedRoute><ResultsPage /></ProtectedRoute>} />
