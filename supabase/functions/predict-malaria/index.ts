@@ -34,38 +34,50 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    const prompt = `You are an expert malaria risk assessment AI. Analyze the following patient data and provide a malaria risk prediction.
+    const prompt = `You are an evidence-based malaria clinical decision-support system. Analyze the following patient data using this structured reasoning framework:
 
-Patient Data:
-- Name: ${patientData.patient_name}
-- Age: ${patientData.age}
-- Gender: ${patientData.gender}
-- Pregnancy Status: ${patientData.pregnancy_status || "N/A"}
-- Travel History: ${patientData.travel_history || "None"}
+## 1. Exposure Assessment
+Evaluate the patient's geographic and travel-related malaria exposure risk.
 - Region: ${patientData.region || "Not specified"}
+- Travel History: ${patientData.travel_history || "None reported"}
 
-Symptoms:
+## 2. Symptom Pattern Analysis
+Identify classic malaria symptom clusters (e.g., paroxysmal fever with chills and sweating, gastrointestinal involvement).
 - Fever: ${patientData.fever ? "Yes" : "No"}
 - Chills: ${patientData.chills ? "Yes" : "No"}
-- Headache: ${patientData.headache ? "Yes" : "No"}
 - Sweating: ${patientData.sweating ? "Yes" : "No"}
+- Headache: ${patientData.headache ? "Yes" : "No"}
 - Nausea: ${patientData.nausea ? "Yes" : "No"}
 - Vomiting: ${patientData.vomiting ? "Yes" : "No"}
 - Body Aches: ${patientData.body_aches ? "Yes" : "No"}
 - Fatigue: ${patientData.fatigue ? "Yes" : "No"}
 - Diarrhea: ${patientData.diarrhea ? "Yes" : "No"}
 
-Lab Values:
-- Temperature: ${patientData.temperature || "Not taken"}°C
-- Hemoglobin (Hb): ${patientData.hemoglobin || "Not tested"} g/dL
-- Platelet Count: ${patientData.platelet_count || "Not tested"} /µL
+## 3. Laboratory Correlation
+Interpret lab values in context of malaria indicators:
+- Temperature: ${patientData.temperature || "Not taken"}°C (fever ≥38°C is significant; ≥39.5°C strongly suggestive)
+- Hemoglobin: ${patientData.hemoglobin || "Not tested"} g/dL (low Hb suggests hemolytic anemia, common in malaria)
+- Platelet Count: ${patientData.platelet_count || "Not tested"} /µL (thrombocytopenia <150,000 is a strong malaria indicator)
 
-Genetic Traits:
-- HbAS (Sickle Cell Trait): ${patientData.hbas_trait ? "Positive" : "Negative/Unknown"}
-- G6PD Deficiency: ${patientData.g6pd_deficiency ? "Yes" : "No/Unknown"}
-- Duffy Antigen Negative: ${patientData.duffy_antigen_negative ? "Yes" : "No/Unknown"}
+## 4. Genetic Risk Adjustment
+Adjust risk assessment based on known protective or susceptibility factors:
+- HbAS (Sickle Cell Trait): ${patientData.hbas_trait ? "Positive (confers ~50% protection against severe P. falciparum)" : "Negative/Unknown"}
+- G6PD Deficiency: ${patientData.g6pd_deficiency ? "Yes (important for treatment choice - avoid primaquine)" : "No/Unknown"}
+- Duffy Antigen Negative: ${patientData.duffy_antigen_negative ? "Yes (protective against P. vivax)" : "No/Unknown"}
 
-Based on clinical evidence and epidemiological data, assess this patient's malaria risk.`;
+## 5. Patient Demographics
+- Name: ${patientData.patient_name}
+- Age: ${patientData.age} (children <5 and elderly at higher risk for severe disease)
+- Gender: ${patientData.gender}
+- Pregnancy Status: ${patientData.pregnancy_status || "N/A"} (pregnancy increases malaria severity risk)
+
+## Instructions
+1. Synthesize all factors to produce a risk score (0-100) and categorical risk level.
+2. Weight factors appropriately: endemic region exposure + classic symptom triad (fever/chills/sweating) + thrombocytopenia are the strongest predictors.
+3. Apply genetic modifiers: HbAS trait should reduce risk score; Duffy negativity should reduce P. vivax risk.
+4. Consider differential diagnoses (dengue, typhoid, viral infections) in your recommendation.
+5. Do NOT provide a definitive diagnosis. Frame as risk assessment requiring confirmatory testing.
+6. Be evidence-based and structured. Do not exaggerate certainty.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -76,7 +88,7 @@ Based on clinical evidence and epidemiological data, assess this patient's malar
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
-          { role: "system", content: "You are a clinical malaria risk assessment system." },
+          { role: "system", content: "You are an evidence-based malaria clinical decision-support system. Follow structured clinical reasoning: exposure assessment, symptom pattern analysis, laboratory correlation, genetic risk adjustment, risk synthesis, differential consideration, and clinical recommendation. Never provide definitive diagnoses. Be cautious, evidence-based, and structured." },
           { role: "user", content: prompt },
         ],
         tools: [{

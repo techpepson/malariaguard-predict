@@ -3,9 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Plus, LogOut, Clock, AlertTriangle, CheckCircle, Info } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Activity, Plus, LogOut, Clock, AlertTriangle, CheckCircle, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Prediction = Tables<"predictions">;
@@ -23,17 +29,27 @@ export default function Dashboard() {
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      const { data } = await supabase
-        .from("predictions")
-        .select("*")
-        .order("created_at", { ascending: false });
-      setPredictions(data || []);
-      setLoading(false);
+  async function loadPredictions() {
+    const { data } = await supabase
+      .from("predictions")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setPredictions(data || []);
+    setLoading(false);
+  }
+
+  useEffect(() => { loadPredictions(); }, []);
+
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const { error } = await supabase.from("predictions").delete().eq("id", id);
+    if (error) {
+      toast.error("Failed to delete prediction");
+      return;
     }
-    load();
-  }, []);
+    setPredictions((prev) => prev.filter((p) => p.id !== id));
+    toast.success("Prediction deleted");
+  };
 
   const stats = {
     total: predictions.length,
@@ -149,6 +165,35 @@ export default function Dashboard() {
                           {risk.label}
                         </Badge>
                       )}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete prediction?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently delete the prediction for <strong>{p.patient_name}</strong>. This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={(e) => handleDelete(p.id, e)}
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </CardContent>
                 </Card>
