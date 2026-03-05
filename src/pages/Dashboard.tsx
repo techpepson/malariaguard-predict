@@ -16,11 +16,15 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type Prediction = Tables<"predictions">;
 
-const RISK_BADGE: Record<string, { label: string; className: string }> = {
-  low: { label: "Low", className: "bg-success/15 text-success border-success/30" },
-  moderate: { label: "Moderate", className: "bg-warning/15 text-warning border-warning/30" },
-  high: { label: "High", className: "bg-risk-high/15 text-risk-high border-risk-high/30" },
-  very_high: { label: "Very High", className: "bg-destructive/15 text-destructive border-destructive/30" },
+function getMalariaStatus(p: Prediction): "positive" | "negative" {
+  if (p.recommendation?.startsWith("MALARIA STATUS: POSITIVE")) return "positive";
+  if (p.recommendation?.startsWith("MALARIA STATUS: NEGATIVE")) return "negative";
+  return p.risk_level === "high" || p.risk_level === "very_high" ? "positive" : "negative";
+}
+
+const STATUS_BADGE = {
+  positive: { label: "Positive", className: "bg-destructive/15 text-destructive border-destructive/30" },
+  negative: { label: "Negative", className: "bg-success/15 text-success border-success/30" },
 };
 
 export default function Dashboard() {
@@ -53,8 +57,8 @@ export default function Dashboard() {
 
   const stats = {
     total: predictions.length,
-    high_risk: predictions.filter((p) => p.risk_level === "high" || p.risk_level === "very_high").length,
-    low_risk: predictions.filter((p) => p.risk_level === "low").length,
+    positive: predictions.filter((p) => getMalariaStatus(p) === "positive").length,
+    negative: predictions.filter((p) => getMalariaStatus(p) === "negative").length,
   };
 
   return (
@@ -96,8 +100,8 @@ export default function Dashboard() {
                 <AlertTriangle className="h-5 w-5 text-destructive" />
               </div>
               <div>
-                <p className="text-2xl font-bold font-display">{stats.high_risk}</p>
-                <p className="text-xs text-muted-foreground">High Risk Cases</p>
+                <p className="text-2xl font-bold font-display">{stats.positive}</p>
+                <p className="text-xs text-muted-foreground">Positive Cases</p>
               </div>
             </CardContent>
           </Card>
@@ -107,8 +111,8 @@ export default function Dashboard() {
                 <CheckCircle className="h-5 w-5 text-success" />
               </div>
               <div>
-                <p className="text-2xl font-bold font-display">{stats.low_risk}</p>
-                <p className="text-xs text-muted-foreground">Low Risk Cases</p>
+                <p className="text-2xl font-bold font-display">{stats.negative}</p>
+                <p className="text-xs text-muted-foreground">Negative Cases</p>
               </div>
             </CardContent>
           </Card>
@@ -139,7 +143,7 @@ export default function Dashboard() {
         ) : (
           <div className="space-y-3">
             {predictions.map((p) => {
-              const risk = p.risk_level ? RISK_BADGE[p.risk_level] : null;
+              const status = STATUS_BADGE[getMalariaStatus(p)];
               return (
                 <Card
                   key={p.id}
@@ -160,9 +164,9 @@ export default function Dashboard() {
                       {p.risk_score != null && (
                         <span className="text-sm font-semibold font-display">{p.risk_score.toFixed(0)}%</span>
                       )}
-                      {risk && (
-                        <Badge variant="outline" className={risk.className}>
-                          {risk.label}
+                      {status && (
+                        <Badge variant="outline" className={status.className}>
+                          {status.label}
                         </Badge>
                       )}
                       <AlertDialog>
