@@ -4,17 +4,23 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, AlertTriangle, CheckCircle, Info, TrendingUp, TrendingDown, Minus, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, AlertTriangle, CheckCircle, Info, TrendingUp, TrendingDown, Minus, FileText, Loader2, ShieldCheck, ShieldAlert } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Prediction = Tables<"predictions">;
 
-const RISK_CONFIG = {
-  low: { label: "Low Risk", className: "bg-success text-success-foreground", icon: CheckCircle },
-  moderate: { label: "Moderate Risk", className: "bg-warning text-warning-foreground", icon: Info },
-  high: { label: "High Risk", className: "bg-risk-high text-primary-foreground", icon: AlertTriangle },
-  very_high: { label: "Very High Risk", className: "bg-destructive text-destructive-foreground", icon: AlertTriangle },
-};
+function getMalariaStatus(prediction: Prediction): "positive" | "negative" {
+  // Derive from recommendation prefix or risk_level
+  if (prediction.recommendation?.startsWith("MALARIA STATUS: POSITIVE")) return "positive";
+  if (prediction.recommendation?.startsWith("MALARIA STATUS: NEGATIVE")) return "negative";
+  // Fallback: high/very_high = positive, else negative
+  return prediction.risk_level === "high" || prediction.risk_level === "very_high" ? "positive" : "negative";
+}
+
+function getCleanRecommendation(recommendation: string | null): string {
+  if (!recommendation) return "";
+  return recommendation.replace(/^MALARIA STATUS: (POSITIVE|NEGATIVE)\n\n/, "");
+}
 
 export default function ResultsPage() {
   const { id } = useParams<{ id: string }>();
@@ -48,9 +54,10 @@ export default function ResultsPage() {
     );
   }
 
-  const risk = prediction.risk_level ? RISK_CONFIG[prediction.risk_level] : null;
-  const RiskIcon = risk?.icon || Info;
+  const status = getMalariaStatus(prediction);
+  const isPositive = status === "positive";
   const factors = (prediction.contributing_factors as any[]) || [];
+  const cleanRec = getCleanRecommendation(prediction.recommendation);
 
   return (
     <div className="min-h-screen bg-background">
@@ -64,13 +71,23 @@ export default function ResultsPage() {
       </header>
 
       <main className="container max-w-3xl py-8 space-y-6">
-        {/* Risk Score Card */}
+        {/* Status Card */}
         <Card className="shadow-medical overflow-hidden">
-          <div className={`px-6 py-8 text-center ${risk?.className || "bg-muted"}`}>
-            <RiskIcon className="mx-auto mb-3 h-10 w-10" />
-            <h2 className="font-display text-2xl font-bold">{risk?.label || "Unknown"}</h2>
-            <p className="mt-1 text-3xl font-bold font-display">{prediction.risk_score?.toFixed(0)}%</p>
-            <p className="text-sm opacity-80 mt-1">Risk Score</p>
+          <div className={`px-6 py-10 text-center ${isPositive ? "bg-destructive" : "bg-success"} text-primary-foreground`}>
+            {isPositive ? (
+              <ShieldAlert className="mx-auto mb-3 h-12 w-12" />
+            ) : (
+              <ShieldCheck className="mx-auto mb-3 h-12 w-12" />
+            )}
+            <h2 className="font-display text-3xl font-bold">
+              {isPositive ? "POSITIVE" : "NEGATIVE"}
+            </h2>
+            <p className="mt-1 text-sm opacity-90">
+              {isPositive ? "Malaria infection likely detected" : "No malaria infection detected"}
+            </p>
+            <p className="mt-3 text-lg font-semibold opacity-90">
+              {prediction.risk_score?.toFixed(0)}% confidence
+            </p>
           </div>
           <CardContent className="p-6">
             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -121,7 +138,7 @@ export default function ResultsPage() {
         )}
 
         {/* Recommendation */}
-        {prediction.recommendation && (
+        {cleanRec && (
           <Card className="shadow-card border-primary/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 font-display text-base">
@@ -129,7 +146,7 @@ export default function ResultsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm leading-relaxed text-foreground">{prediction.recommendation}</p>
+              <p className="text-sm leading-relaxed text-foreground">{cleanRec}</p>
             </CardContent>
           </Card>
         )}

@@ -31,6 +31,7 @@ serve(async (req) => {
     }
 
     const patientData = await req.json();
+    console.log("Patient data received:", JSON.stringify(patientData));
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
@@ -72,12 +73,15 @@ Adjust risk assessment based on known protective or susceptibility factors:
 - Pregnancy Status: ${patientData.pregnancy_status || "N/A"} (pregnancy increases malaria severity risk)
 
 ## Instructions
-1. Synthesize all factors to produce a risk score (0-100) and categorical risk level.
-2. Weight factors appropriately: endemic region exposure + classic symptom triad (fever/chills/sweating) + thrombocytopenia are the strongest predictors.
-3. Apply genetic modifiers: HbAS trait should reduce risk score; Duffy negativity should reduce P. vivax risk.
-4. Consider differential diagnoses (dengue, typhoid, viral infections) in your recommendation.
-5. Do NOT provide a definitive diagnosis. Frame as risk assessment requiring confirmatory testing.
-6. Be evidence-based and structured. Do not exaggerate certainty.`;
+1. Synthesize all factors to determine a malaria status: "positive" (likely infected, needs treatment) or "negative" (unlikely infected).
+2. Produce a confidence score (0-100) representing how confident you are in the assessment.
+3. Weight factors appropriately: endemic region exposure + classic symptom triad (fever/chills/sweating) + thrombocytopenia are the strongest predictors.
+4. A patient with ≥3 classic symptoms + endemic exposure + lab abnormalities should be classified as positive.
+5. A patient with few/no symptoms, no exposure, and normal labs should be classified as negative.
+6. Apply genetic modifiers: HbAS trait should reduce likelihood; Duffy negativity should reduce P. vivax risk.
+7. Consider differential diagnoses (dengue, typhoid, viral infections) in your recommendation.
+8. Do NOT provide a definitive diagnosis. Frame as clinical assessment requiring confirmatory testing (RDT/microscopy).
+9. Be evidence-based and structured. Do not exaggerate certainty.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -95,12 +99,13 @@ Adjust risk assessment based on known protective or susceptibility factors:
           type: "function",
           function: {
             name: "malaria_risk_assessment",
-            description: "Provide structured malaria risk assessment",
+            description: "Provide structured malaria risk assessment with positive/negative status",
             parameters: {
               type: "object",
               properties: {
-                risk_level: { type: "string", enum: ["low", "moderate", "high", "very_high"], description: "Overall risk level" },
-                risk_score: { type: "number", description: "Risk score from 0-100" },
+                malaria_status: { type: "string", enum: ["positive", "negative"], description: "Whether patient is likely positive or negative for malaria" },
+                risk_level: { type: "string", enum: ["low", "moderate", "high", "very_high"], description: "Overall risk level for severity" },
+                risk_score: { type: "number", description: "Confidence score from 0-100" },
                 contributing_factors: {
                   type: "array",
                   items: {
@@ -115,7 +120,7 @@ Adjust risk assessment based on known protective or susceptibility factors:
                 },
                 recommendation: { type: "string", description: "Clinical recommendation for the patient" },
               },
-              required: ["risk_level", "risk_score", "contributing_factors", "recommendation"],
+              required: ["malaria_status", "risk_level", "risk_score", "contributing_factors", "recommendation"],
               additionalProperties: false,
             },
           },
@@ -148,6 +153,10 @@ Adjust risk assessment based on known protective or susceptibility factors:
     }
 
     const prediction = JSON.parse(toolCall.function.arguments);
+    console.log("AI prediction result:", JSON.stringify(prediction));
+
+    // Derive risk_level from malaria_status if needed for DB compatibility
+    const effectiveRiskLevel = prediction.risk_level || (prediction.malaria_status === "positive" ? "high" : "low");
 
     // Save to database
     const { data: savedPrediction, error: saveError } = await supabaseClient
@@ -155,10 +164,12 @@ Adjust risk assessment based on known protective or susceptibility factors:
       .insert({
         ...patientData,
         user_id: user.id,
-        risk_level: prediction.risk_level,
+        risk_level: effectiveRiskLevel,
         risk_score: prediction.risk_score,
         contributing_factors: prediction.contributing_factors,
-        recommendation: prediction.recommendation,
+        recommendation: prediction.malaria_status === "positive"
+          ? `MALARIA STATUS: POSITIVE\n\n${prediction.recommendation}`
+          : `MALARIA STATUS: NEGATIVE\n\n${prediction.recommendation}`,
       })
       .select()
       .single();
